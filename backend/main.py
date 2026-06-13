@@ -93,7 +93,11 @@ _FRONTEND_ORIGINS = [
     "http://localhost:3000",   # CRA / fallback
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
+    "https://sandeepkumaramgothu.github.io", # Your deployed GitHub Pages frontend
 ]
+
+if os.environ.get("FRONTEND_URL"):
+    _FRONTEND_ORIGINS.append(os.environ.get("FRONTEND_URL"))
 
 app.add_middleware(
     CORSMiddleware,
