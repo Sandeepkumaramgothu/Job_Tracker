@@ -25,6 +25,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import sys
+# Add the project root to sys.path so 'from backend.*' absolute imports work
+# when running 'uvicorn main:app' directly from the backend/ directory.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from backend.routers import analytics, applications, files, notifications, cron
 
 load_dotenv()
