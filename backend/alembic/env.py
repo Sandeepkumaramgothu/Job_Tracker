@@ -45,6 +45,11 @@ if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 DATABASE_URL = DATABASE_URL.replace("?pgbouncer=true", "").replace("&pgbouncer=true", "")
 
+if "?" in DATABASE_URL:
+    DATABASE_URL += "&prepared_statement_cache_size=0"
+else:
+    DATABASE_URL += "?prepared_statement_cache_size=0"
+
 # Escape % signs so ConfigParser doesn't treat them as interpolation characters
 escaped_url = DATABASE_URL.replace("%", "%%")
 config.set_main_option("sqlalchemy.url", escaped_url)
