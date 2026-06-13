@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 # WARN: DATABASE_URL must use the postgresql+asyncpg:// scheme.
 # If the env var is missing the app will raise at import time — intentional.
 DATABASE_URL: str = os.environ["DATABASE_URL"]
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 engine = create_async_engine(
     DATABASE_URL,
