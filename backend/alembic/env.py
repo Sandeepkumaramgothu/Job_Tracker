@@ -10,7 +10,7 @@ from alembic import context
 from dotenv import load_dotenv
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 
 # ---------------------------------------------------------------------------
 # Make sure 'backend/' is on sys.path so our local imports resolve.
@@ -44,11 +44,6 @@ DATABASE_URL: str = os.environ["DATABASE_URL"]
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 DATABASE_URL = DATABASE_URL.replace("?pgbouncer=true", "").replace("&pgbouncer=true", "")
-
-if "?" in DATABASE_URL:
-    DATABASE_URL += "&prepared_statement_cache_size=0"
-else:
-    DATABASE_URL += "?prepared_statement_cache_size=0"
 
 # Escape % signs so ConfigParser doesn't treat them as interpolation characters
 escaped_url = DATABASE_URL.replace("%", "%%")
@@ -99,11 +94,18 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    """Create an async engine and run the migrations through a sync wrapper."""
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    """Create an async engine and run the migrations through a sync wrapper.
+    
+    Uses NullPool and statement_cache_size=0 so that Alembic works correctly
+    with Supabase's PgBouncer transaction-mode pooler.
+    """
+    connectable = create_async_engine(
+        DATABASE_URL,
         poolclass=pool.NullPool,
+        connect_args={
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+        },
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

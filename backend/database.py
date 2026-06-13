@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 load_dotenv()
 
@@ -27,19 +28,19 @@ if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 DATABASE_URL = DATABASE_URL.replace("?pgbouncer=true", "").replace("&pgbouncer=true", "")
 
-if "?" in DATABASE_URL:
-    DATABASE_URL += "&prepared_statement_cache_size=0"
-else:
-    DATABASE_URL += "?prepared_statement_cache_size=0"
-
+# When using Supabase (PgBouncer in transaction mode):
+#   1. NullPool — disable SQLAlchemy connection pooling; PgBouncer does it.
+#   2. statement_cache_size=0 — disable asyncpg prepared statement cache
+#      because PgBouncer transaction mode does NOT support prepared statements.
+# These two settings together prevent the "prepared statement does not exist"
+# and connection-hang errors we were hitting in production.
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,          # set to True locally to log all SQL statements
-    pool_pre_ping=True,  # recycle stale connections automatically
-    pool_size=10,
-    max_overflow=20,
+    poolclass=NullPool,  # let PgBouncer handle connection pooling
     connect_args={
-        "statement_cache_size": 0,
+        "statement_cache_size": 0,          # disable asyncpg statement cache
+        "prepared_statement_cache_size": 0,  # disable asyncpg prepared stmt cache
     },
 )
 
