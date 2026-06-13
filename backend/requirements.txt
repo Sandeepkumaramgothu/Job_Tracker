@@ -1,0 +1,29 @@
+# backend/requirements.txt
+
+# Web framework
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+
+# Database
+sqlalchemy==2.0.30
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# Task queue
+celery==5.4.0
+redis==5.0.4
+
+# Email
+sendgrid==6.11.0
+
+# Validation
+pydantic[email]==2.7.1
+pydantic-settings==2.3.1
+
+# Environment
+python-dotenv==1.0.1
+
+# File handling
+python-multipart==0.0.9
+aiofiles==23.2.1
