@@ -45,6 +45,11 @@ if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 DATABASE_URL = DATABASE_URL.replace("?pgbouncer=true", "").replace("&pgbouncer=true", "")
 
+# Append prepared_statement_cache_size=0 to the URL so SQLAlchemy's asyncpg
+# dialect does NOT use connection.prepare() — required for PgBouncer.
+_sep = "&" if "?" in DATABASE_URL else "?"
+DATABASE_URL += f"{_sep}prepared_statement_cache_size=0"
+
 # Escape % signs so ConfigParser doesn't treat them as interpolation characters
 escaped_url = DATABASE_URL.replace("%", "%%")
 config.set_main_option("sqlalchemy.url", escaped_url)
@@ -104,7 +109,6 @@ async def run_async_migrations() -> None:
         poolclass=pool.NullPool,
         connect_args={
             "statement_cache_size": 0,
-            "prepared_statement_cache_size": 0,
         },
     )
     async with connectable.connect() as connection:
