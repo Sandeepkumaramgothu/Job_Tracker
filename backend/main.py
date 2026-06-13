@@ -26,8 +26,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import sys
-# Add the project root to sys.path so 'from backend.*' absolute imports work
-# when running 'uvicorn main:app' directly from the backend/ directory.
+import traceback
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.routers import analytics, applications, files, notifications, cron
@@ -84,6 +86,13 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "traceback": traceback.format_exc()},
+    )
 
 
 # ---------------------------------------------------------------------------
