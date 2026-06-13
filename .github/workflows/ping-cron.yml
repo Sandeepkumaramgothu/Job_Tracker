@@ -1,0 +1,16 @@
+name: Ping Serverless Cron
+
+on:
+  schedule:
+    # Run at minute 0 past every hour
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping_cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Cron Endpoint
+        run: |
+          # Render API URL must be set in GitHub repository secrets
+          curl -X POST -f "${{ secrets.API_URL }}/api/cron/run?secret=${{ secrets.CRON_SECRET }}"

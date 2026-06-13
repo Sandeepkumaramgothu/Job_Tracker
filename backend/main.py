@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routers import analytics, applications, files, notifications
+from backend.routers import analytics, applications, files, notifications, cron
 
 load_dotenv()
 
@@ -112,6 +112,7 @@ app.include_router(applications.router)
 app.include_router(files.router)
 app.include_router(notifications.router)
 app.include_router(analytics.router)
+app.include_router(cron.router)
 
 
 # ---------------------------------------------------------------------------

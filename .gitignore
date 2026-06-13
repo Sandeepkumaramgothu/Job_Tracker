@@ -35,3 +35,4 @@ celerybeat.pid
 .vscode/
 *.swp
 *.swo
+backend/celerybeat-schedule.db

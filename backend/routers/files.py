@@ -12,10 +12,10 @@ import logging
 import mimetypes
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
-from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse
 
 from backend.schemas.application import FileUploadResponse
-from backend.services.file_service import delete_file, get_file_path, save_file
+from backend.services.file_service import delete_file, get_presigned_url, save_file
 
 logger = logging.getLogger(__name__)
 
@@ -55,28 +55,13 @@ async def upload_file(
 @router.get(
     "/{filename}",
     summary="Download a stored file by filename",
-    response_class=FileResponse,
+    response_class=RedirectResponse,
 )
-async def download_file(filename: str) -> FileResponse:
+async def download_file(filename: str) -> RedirectResponse:
     """
-    Serves a stored file as an attachment download.
-    The filename must be the server-assigned UUID-prefixed name returned
-    by the upload endpoint — not the user's original filename.
-
-    WARN: Only files within UPLOAD_DIR are served. The path-traversal guard
-    in get_file_path() will raise HTTP 400 for any filename that attempts to
-    escape the upload directory.
+    Redirects to an S3 presigned URL to securely download the file directly 
+    from cloud storage.
     """
-    file_path = get_file_path(filename)
-
-    # Detect media type for the Content-Type header.
-    media_type, _ = mimetypes.guess_type(str(file_path))
-    if media_type is None:
-        media_type = "application/octet-stream"
-
-    return FileResponse(
-        path=str(file_path),
-        filename=filename,
-        media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    url = await get_presigned_url(filename)
+    # Temporary redirect so the browser doesn't cache the short-lived presigned URL
+    return RedirectResponse(url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)

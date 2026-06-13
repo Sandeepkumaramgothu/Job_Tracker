@@ -1,43 +1,36 @@
 # backend/services/file_service.py
 
 """
-File upload handling — MIME validation, size enforcement, and storage abstraction.
-
-Design decision: files are stored on local disk under UPLOAD_DIR (default ./uploads).
-The abstraction layer (save_file / delete_file) is kept intentionally thin so it can
-be swapped out for an S3 implementation without touching router code.
-Callers always work with `str` paths (local disk paths or S3 keys).
-
-WARN: This service does NOT clean up stale DB file-path references if a disk
-delete fails. The router must handle that case explicitly.
+File upload handling — MIME validation, size enforcement, and S3 storage.
 """
 
 import logging
 import os
 import uuid
-from pathlib import Path
 from typing import Tuple
 
-import aiofiles
+import aioboto3
+from botocore.exceptions import ClientError
 from fastapi import HTTPException, UploadFile, status
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Configuration — read from environment, with safe defaults
+# Configuration — read from environment
 # ---------------------------------------------------------------------------
-UPLOAD_DIR: Path = Path(os.environ.get("UPLOAD_DIR", "./uploads")).resolve()
+S3_BUCKET_NAME = os.environ.get("S3_BUCKET_NAME")
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
+AWS_ENDPOINT_URL = os.environ.get("AWS_ENDPOINT_URL")
+
 MAX_FILE_SIZE_BYTES: int = int(os.environ.get("MAX_FILE_SIZE_MB", "5")) * 1024 * 1024
 
-# Allowed MIME types as required by CLAUDE.md:
-#   PDF and DOCX only.
-# WARN: Browsers sometimes send 'application/octet-stream' for .docx — we
-# also accept the Microsoft OOXML type to cover that edge case.
 ALLOWED_MIME_TYPES: frozenset = frozenset(
     {
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/octet-stream",  # fallback some browsers send for .docx
+        "application/octet-stream",
     }
 )
 
@@ -49,16 +42,10 @@ ALLOWED_EXTENSIONS: frozenset = frozenset({".pdf", ".docx"})
 # ---------------------------------------------------------------------------
 
 def _validate_file(upload: UploadFile) -> None:
-    """
-    Validate MIME type and file extension.
-    Raises HTTP 415 if the file type is not allowed.
-
-    WARN: MIME type reported by the client can be spoofed.
-    For production hardening, add python-magic to inspect the file's
-    actual magic bytes. This implementation trusts the Content-Type header
-    and the file extension, which is acceptable for an internal tool.
-    """
-    suffix = Path(upload.filename or "").suffix.lower()
+    filename = upload.filename or ""
+    _, suffix = os.path.splitext(filename)
+    suffix = suffix.lower()
+    
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -76,118 +63,99 @@ def _validate_file(upload: UploadFile) -> None:
             ),
         )
 
-
-def _ensure_upload_dir() -> None:
-    """Create the upload directory if it does not already exist."""
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-
 def _unique_filename(original: str) -> str:
-    """
-    Prefix the original filename with a UUID4 to prevent collisions and
-    avoid directory traversal attacks via crafted filenames.
-    """
-    suffix = Path(original).suffix.lower()
-    return f"{uuid.uuid4().hex}{suffix}"
+    _, suffix = os.path.splitext(original)
+    return f"{uuid.uuid4().hex}{suffix.lower()}"
 
+def _get_s3_client():
+    session = aioboto3.Session()
+    return session.client(
+        "s3",
+        region_name=AWS_REGION,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        endpoint_url=AWS_ENDPOINT_URL
+    )
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 async def save_file(upload: UploadFile) -> Tuple[str, str]:
-    """
-    Validate, read, and persist an uploaded file to UPLOAD_DIR.
+    if not S3_BUCKET_NAME:
+        raise HTTPException(
+            status_code=500, detail="S3_BUCKET_NAME environment variable is not set."
+        )
 
-    Returns:
-        (stored_filename, absolute_path_str)
-
-    Raises:
-        HTTP 415 — unsupported file type
-        HTTP 413 — file exceeds MAX_FILE_SIZE_BYTES
-        HTTP 500 — disk write failure
-    """
     _validate_file(upload)
-    _ensure_upload_dir()
 
     stored_name = _unique_filename(upload.filename or "upload")
-    dest_path = UPLOAD_DIR / stored_name
+    content = await upload.read()
+
+    if len(content) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                f"File size {len(content) / 1024 / 1024:.2f} MB exceeds "
+                f"the limit."
+            ),
+        )
 
     try:
-        content = await upload.read()
-
-        if len(content) > MAX_FILE_SIZE_BYTES:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=(
-                    f"File size {len(content) / 1024 / 1024:.2f} MB exceeds "
-                    f"the {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB limit."
-                ),
+        async with _get_s3_client() as s3:
+            await s3.put_object(
+                Bucket=S3_BUCKET_NAME,
+                Key=stored_name,
+                Body=content,
+                ContentType=upload.content_type
             )
-
-        async with aiofiles.open(dest_path, "wb") as f:
-            await f.write(content)
-
-    except HTTPException:
-        raise
-    except OSError as exc:
-        logger.error("Failed to write uploaded file to %s: %s", dest_path, exc)
+    except Exception as exc:
+        logger.error("Failed to upload file to S3: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save uploaded file. Please try again.",
         ) from exc
 
-    logger.info("Saved upload: %s (%d bytes)", dest_path, len(content))
-    return stored_name, str(dest_path)
+    logger.info("Saved upload to S3: %s (%d bytes)", stored_name, len(content))
+    return stored_name, stored_name
 
 
 async def delete_file(filename: str) -> None:
-    """
-    Delete a stored file by its stored filename (not a full path).
-
-    WARN: If the file does not exist on disk this is treated as a no-op
-    (the DB record may already be stale — log a warning but don't raise).
-    """
-    target = UPLOAD_DIR / filename
-    if not target.exists():
-        logger.warning("delete_file: file not found on disk: %s", target)
+    if not S3_BUCKET_NAME:
         return
+        
     try:
-        target.unlink()
-        logger.info("Deleted file: %s", target)
-    except OSError as exc:
-        logger.error("Failed to delete file %s: %s", target, exc)
+        async with _get_s3_client() as s3:
+            await s3.delete_object(Bucket=S3_BUCKET_NAME, Key=filename)
+        logger.info("Deleted file from S3: %s", filename)
+    except Exception as exc:
+        logger.error("Failed to delete file %s from S3: %s", filename, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Could not delete file '{filename}'.",
         ) from exc
 
 
-def get_file_path(filename: str) -> Path:
-    """
-    Resolve and validate the full path for a stored filename.
-
-    Raises:
-        HTTP 404 — file not found on disk
-        HTTP 400 — attempted path traversal outside UPLOAD_DIR
-
-    WARN: Always use this function before serving files — never construct
-    paths from user input directly. The resolve() + is_relative_to() guard
-    prevents directory traversal attacks.
-    """
-    target = (UPLOAD_DIR / filename).resolve()
-
-    # Guard against path traversal (e.g. filename = "../../etc/passwd")
-    if not target.is_relative_to(UPLOAD_DIR):
+async def get_presigned_url(filename: str) -> str:
+    if not S3_BUCKET_NAME:
+        raise HTTPException(status_code=500, detail="S3_BUCKET_NAME not configured.")
+        
+    try:
+        async with _get_s3_client() as s3:
+            # We add ResponseContentDisposition so it downloads as an attachment
+            url = await s3.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': S3_BUCKET_NAME, 
+                    'Key': filename,
+                    'ResponseContentDisposition': f'attachment; filename="{filename}"'
+                },
+                ExpiresIn=3600
+            )
+            return url
+    except Exception as exc:
+        logger.error("Failed to generate presigned URL for %s: %s", filename, exc)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid filename.",
-        )
-
-    if not target.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"File '{filename}' not found.",
-        )
-
-    return target
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not generate download link."
+        ) from exc

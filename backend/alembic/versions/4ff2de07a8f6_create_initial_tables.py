@@ -25,6 +25,7 @@ applicationstatus = postgresql.ENUM(
     "offer",
     "rejected",
     name="applicationstatus",
+    create_type=False,
 )
 
 
@@ -55,15 +56,7 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column(
             "status",
-            sa.Enum(
-                "applied",
-                "interview",
-                "followup",
-                "offer",
-                "rejected",
-                name="applicationstatus",
-                create_type=False,  # type already created above
-            ),
+            applicationstatus,
             nullable=False,
         ),
         sa.Column("resume_path", sa.String(), nullable=True),
@@ -98,20 +91,11 @@ def upgrade() -> None:
             postgresql.UUID(as_uuid=True),
             sa.ForeignKey("applications.id", ondelete="CASCADE"),
             nullable=False,
-            index=True,
         ),
         sa.Column("event_date", sa.Date(), nullable=False),
         sa.Column(
             "status",
-            sa.Enum(
-                "applied",
-                "interview",
-                "followup",
-                "offer",
-                "rejected",
-                name="applicationstatus",
-                create_type=False,
-            ),
+            applicationstatus,
             nullable=False,
         ),
         sa.Column("note", sa.Text(), nullable=True),
