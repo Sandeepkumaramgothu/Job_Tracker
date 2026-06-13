@@ -43,6 +43,7 @@ config = context.config
 DATABASE_URL: str = os.environ["DATABASE_URL"]
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+DATABASE_URL = DATABASE_URL.replace("?pgbouncer=true", "").replace("&pgbouncer=true", "")
 
 # Escape % signs so ConfigParser doesn't treat them as interpolation characters
 escaped_url = DATABASE_URL.replace("%", "%%")

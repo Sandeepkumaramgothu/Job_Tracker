@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 DATABASE_URL: str = os.environ["DATABASE_URL"]
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+DATABASE_URL = DATABASE_URL.replace("?pgbouncer=true", "").replace("&pgbouncer=true", "")
 
 engine = create_async_engine(
     DATABASE_URL,
