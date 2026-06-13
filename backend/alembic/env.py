@@ -41,7 +41,12 @@ config = context.config
 
 # Inject DATABASE_URL from environment (overrides any value in alembic.ini)
 DATABASE_URL: str = os.environ["DATABASE_URL"]
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+# Escape % signs so ConfigParser doesn't treat them as interpolation characters
+escaped_url = DATABASE_URL.replace("%", "%%")
+config.set_main_option("sqlalchemy.url", escaped_url)
 
 # Set up Python logging from alembic.ini [loggers] section
 if config.config_file_name is not None:
