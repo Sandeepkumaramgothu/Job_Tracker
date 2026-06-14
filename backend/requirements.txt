@@ -27,5 +27,7 @@ greenlet
 # Cloud storage
 aioboto3==12.4.0
 
-# Auth — verify Supabase JWTs (HS256, project secret)
-pyjwt==2.9.0
+# Auth — verify Supabase JWTs. Supabase issues ES256-signed tokens via
+# asymmetric signing keys; the [crypto] extra pulls in `cryptography`,
+# which PyJWT needs for ECDSA verification.
+pyjwt[crypto]==2.9.0
