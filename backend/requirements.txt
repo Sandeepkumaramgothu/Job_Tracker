@@ -22,7 +22,10 @@ python-dotenv==1.0.1
 # File handling
 python-multipart==0.0.9
 aiofiles==23.2.1
-greenlet
+# Pin greenlet — newer versions have broken sqlalchemy 2.0.30 + asyncpg 0.29.0
+# in a way that surfaces as the asyncpg+PgBouncer prepared-statement error,
+# even with statement_cache_size=0.
+greenlet==3.0.3
 
 # Cloud storage
 aioboto3==12.4.0
