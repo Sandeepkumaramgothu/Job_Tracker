@@ -40,7 +40,7 @@ export async function uploadFile(file) {
 // The URL triggers an attachment download (Content-Disposition: attachment).
 // ---------------------------------------------------------------------------
 export function getFileDownloadUrl(filename) {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://job-tracker-fjd6.onrender.com';
   return `${baseUrl}${BASE}/${encodeURIComponent(filename)}`;
 }
 
