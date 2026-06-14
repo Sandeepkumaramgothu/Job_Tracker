@@ -46,12 +46,6 @@ export function AuthProvider({ children }) {
   const signInWithEmail = (email, password) =>
     supabase.auth.signInWithPassword({ email, password });
 
-  const signInWithGoogle = () =>
-    supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin + window.location.pathname },
-    });
-
   const signOut = () => supabase.auth.signOut();
 
   const value = {
@@ -60,7 +54,6 @@ export function AuthProvider({ children }) {
     loading,
     signUpWithEmail,
     signInWithEmail,
-    signInWithGoogle,
     signOut,
   };
 
