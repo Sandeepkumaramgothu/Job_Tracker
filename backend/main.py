@@ -22,8 +22,9 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 import sys
 
@@ -88,10 +89,7 @@ app = FastAPI(
 
 
 # ---------------------------------------------------------------------------
-# CORS
-# WARN: The origins list below allows the local Vite dev server.
-# For production, restrict to your actual frontend domain(s) only.
-# Never use allow_origins=["*"] in production — it disables credential sharing.
+# CORS — allowed origins list
 # ---------------------------------------------------------------------------
 
 _FRONTEND_ORIGINS = [
@@ -112,6 +110,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Global exception handler — ensures CORS headers are present on 500 errors.
+# Without this, unhandled exceptions bypass CORS middleware, and the browser
+# blocks the response entirely (shows "Network Error" instead of the real error).
+# ---------------------------------------------------------------------------
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    origin = request.headers.get("origin", "")
+    headers = {}
+    if origin in _FRONTEND_ORIGINS:
+        headers["access-control-allow-origin"] = origin
+        headers["access-control-allow-credentials"] = "true"
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc)},
+        headers=headers,
+    )
 
 
 # ---------------------------------------------------------------------------

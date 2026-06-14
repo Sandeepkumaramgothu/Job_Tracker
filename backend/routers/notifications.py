@@ -143,6 +143,13 @@ async def send_test_notification(
             detail="Notification settings not configured. Set them via PUT /api/notifications/settings first.",
         )
 
-    await send_test_email(settings.email)
+    try:
+        await send_test_email(settings.email)
+    except Exception as exc:
+        logger.error("Test email failed: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Email send failed: {exc}. Check your SENDGRID_API_KEY and FROM_EMAIL environment variables on Render.",
+        )
     logger.info("Test notification sent to %s", settings.email)
     return {"message": f"Test email sent to {settings.email}."}
