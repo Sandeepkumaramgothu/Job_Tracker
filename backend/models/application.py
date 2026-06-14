@@ -38,6 +38,13 @@ class ApplicationStatus(str, enum.Enum):
 # ---------------------------------------------------------------------------
 class Application(Base):
     __tablename__ = "applications"
+    # eager_defaults=True makes SQLAlchemy fetch server-computed values
+    # (created_at, updated_at) via RETURNING in the same INSERT/UPDATE.
+    # Without this, updated_at is expired after UPDATE and the next access
+    # triggers a lazy SELECT — which fails (MissingGreenlet) during async
+    # response serialization after the session closes, producing an
+    # uncaught 500 with no CORS headers (the "Network Error" symptom).
+    __mapper_args__ = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -87,6 +94,7 @@ class Application(Base):
 # ---------------------------------------------------------------------------
 class TimelineEvent(Base):
     __tablename__ = "timeline_events"
+    __mapper_args__ = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
