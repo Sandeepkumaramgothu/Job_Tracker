@@ -156,9 +156,23 @@ async def create_application(
 ) -> Application:
     """
     Creates a new Application and an initial TimelineEvent
-    recording the date_applied with status = 'applied'.
+    recording the date_applied with the supplied status.
     Returns the full ApplicationDetail (with timeline).
+
+    WARN: Creating an application with status='interview' is rejected because
+    the initial event would lack an interview_date. Callers should create the
+    application with status='applied', then PATCH with a timeline_event
+    carrying the interview_date.
     """
+    if body.status == ApplicationStatus.interview:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Cannot create an application directly in 'interview' status. "
+                "Create it as 'applied', then update with an interview_date."
+            ),
+        )
+
     app = Application(
         job_title=body.job_title,
         company=body.company,

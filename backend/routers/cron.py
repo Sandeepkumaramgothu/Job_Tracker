@@ -6,7 +6,9 @@ Used to trigger scheduled tasks without needing a dedicated background worker li
 """
 
 import os
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
@@ -21,13 +23,21 @@ router = APIRouter(prefix="/api/cron", tags=["cron"])
 
 CRON_SECRET = os.environ.get("CRON_SECRET", "default_insecure_secret")
 
+
 @router.post("/run", summary="Run all scheduled tasks")
-async def run_cron_tasks(secret: str, db: AsyncSession = Depends(get_db)):
+async def run_cron_tasks(
+    x_cron_secret: Optional[str] = Header(default=None, alias="X-Cron-Secret"),
+    secret: Optional[str] = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
     """
     Executes all scheduled background tasks.
-    Must be called with the correct `secret` query parameter matching the CRON_SECRET env var.
+    Prefer the `X-Cron-Secret` header. The `?secret=` query param is supported
+    for backward compatibility with the existing GitHub Actions ping but
+    should be migrated to the header — query strings are recorded in access logs.
     """
-    if secret != CRON_SECRET:
+    supplied = x_cron_secret or secret
+    if supplied != CRON_SECRET:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid cron secret",

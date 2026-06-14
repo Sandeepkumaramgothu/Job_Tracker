@@ -10,7 +10,6 @@ import uuid
 from typing import Tuple
 
 import aioboto3
-from botocore.exceptions import ClientError
 from fastapi import HTTPException, UploadFile, status
 
 logger = logging.getLogger(__name__)

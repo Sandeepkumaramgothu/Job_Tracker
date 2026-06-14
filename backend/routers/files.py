@@ -9,13 +9,12 @@ Routes:
 """
 
 import logging
-import mimetypes
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, UploadFile, File, status
 from fastapi.responses import RedirectResponse
 
 from backend.schemas.application import FileUploadResponse
-from backend.services.file_service import delete_file, get_presigned_url, save_file
+from backend.services.file_service import get_presigned_url, save_file
 
 logger = logging.getLogger(__name__)
 
