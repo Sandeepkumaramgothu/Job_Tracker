@@ -35,13 +35,16 @@ export async function uploadFile(file) {
 }
 
 // ---------------------------------------------------------------------------
-// Get the public download URL for a stored file.
-// Returns a string URL that can be used as an <a href> or window.open target.
-// The URL triggers an attachment download (Content-Disposition: attachment).
+// Fetch a short-lived presigned URL for a stored file, then open it.
+//
+// Why this isn't an <a href>: the GET on /api/files/{filename} requires the
+// Authorization header, which the browser strips on plain link navigation.
+// So we go through axios (which adds the header), get the URL back, and
+// open it in a new tab so the browser handles the actual download.
 // ---------------------------------------------------------------------------
-export function getFileDownloadUrl(filename) {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://job-tracker-fjd6.onrender.com';
-  return `${baseUrl}${BASE}/${encodeURIComponent(filename)}`;
+export async function openFileDownload(filename) {
+  const response = await api.get(`${BASE}/${encodeURIComponent(filename)}`);
+  window.open(response.data.url, '_blank', 'noopener,noreferrer');
 }
 
 // ---------------------------------------------------------------------------

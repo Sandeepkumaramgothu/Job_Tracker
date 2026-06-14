@@ -17,7 +17,7 @@
 
 import { useRef, useState } from 'react';
 import { useUpdateApplication, useUploadFile } from '../hooks/useApplications';
-import { getFileDownloadUrl, validateFile } from '../services/fileService';
+import { openFileDownload, validateFile } from '../services/fileService';
 
 export default function FileUploadZone({ label, currentPath, onUploaded, appId, field }) {
   const inputRef = useRef(null);
@@ -67,10 +67,20 @@ export default function FileUploadZone({ label, currentPath, onUploaded, appId, 
     e.target.value = ''; // reset so same file can be re-uploaded
   };
 
-  // Extract just the filename from the stored path for display
+  // Extract just the filename from the stored path for display.
+  // currentPath is now `<user_id>/<random>.<ext>`; we only show the trailing segment.
   const storedFilename = currentPath
     ? currentPath.split('/').pop()
     : null;
+
+  const handleDownload = async (e) => {
+    e.stopPropagation();
+    try {
+      await openFileDownload(currentPath);
+    } catch (err) {
+      setValidationError(err.userMessage || 'Failed to open download.');
+    }
+  };
 
   return (
     <div className="space-y-2">
@@ -130,15 +140,13 @@ export default function FileUploadZone({ label, currentPath, onUploaded, appId, 
                         border border-slate-700 rounded-lg">
           <span className="text-base">📄</span>
           <span className="text-xs text-slate-400 flex-1 truncate">{storedFilename}</span>
-          <a
-            href={getFileDownloadUrl(storedFilename)}
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
+            onClick={handleDownload}
             className="text-xs text-blue-400 hover:text-blue-300 transition-colors shrink-0"
-            onClick={(e) => e.stopPropagation()}
           >
             Download ↓
-          </a>
+          </button>
         </div>
       )}
 

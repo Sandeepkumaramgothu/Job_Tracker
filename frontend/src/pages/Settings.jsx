@@ -14,6 +14,7 @@ import {
   useSaveNotificationSettings,
   useSendTestEmail,
 } from '../hooks/useNotifications';
+import { useAuth } from '../hooks/useAuth';
 
 const DEFAULTS = {
   email: '',
@@ -74,6 +75,7 @@ export default function Settings() {
   const { data: settings, isLoading } = useNotificationSettings();
   const saveMutation = useSaveNotificationSettings();
   const testMutation = useSendTestEmail();
+  const { user, signOut } = useAuth();
 
   // Populate form when settings load
   useEffect(() => {
@@ -275,6 +277,25 @@ export default function Settings() {
             Save your settings first before sending a test email.
           </p>
         )}
+      </div>
+
+      {/* Account */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6">
+        <h2 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-2">
+          Account
+        </h2>
+        <p className="text-sm text-slate-400 mb-4">
+          Signed in as <span className="text-slate-200">{user?.email}</span>
+        </p>
+        <button
+          id="sign-out-btn"
+          type="button"
+          onClick={signOut}
+          className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm
+                     font-semibold rounded-xl border border-slate-600 transition-colors"
+        >
+          Sign out
+        </button>
       </div>
     </div>
   );

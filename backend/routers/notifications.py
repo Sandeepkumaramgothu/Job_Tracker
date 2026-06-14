@@ -15,12 +15,14 @@ updates the existing row if found, otherwise inserts a new one.
 """
 
 import logging
+import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.auth import get_current_user_id
 from backend.database import get_db
 from backend.models.application import NotificationSettings
 from backend.schemas.application import (
@@ -38,9 +40,13 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 # Helper
 # ---------------------------------------------------------------------------
 
-async def _get_settings(db: AsyncSession) -> Optional[NotificationSettings]:
-    """Fetch the single notification settings row, or None if not yet created."""
-    result = await db.execute(select(NotificationSettings).limit(1))
+async def _get_settings(
+    db: AsyncSession, user_id: uuid.UUID
+) -> Optional[NotificationSettings]:
+    """Fetch this user's notification settings, or None if not yet created."""
+    result = await db.execute(
+        select(NotificationSettings).where(NotificationSettings.user_id == user_id)
+    )
     return result.scalar_one_or_none()
 
 
@@ -55,12 +61,13 @@ async def _get_settings(db: AsyncSession) -> Optional[NotificationSettings]:
 )
 async def get_notification_settings(
     db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> NotificationSettings:
     """
     Returns the notification preferences row.
     Returns HTTP 404 if settings have not been configured yet via PUT.
     """
-    settings = await _get_settings(db)
+    settings = await _get_settings(db, user_id)
     if settings is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -84,15 +91,17 @@ async def get_notification_settings(
 async def upsert_notification_settings(
     body: NotificationSettingsUpdate,
     db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> NotificationSettings:
     """
     Creates the settings row on first call; updates it on subsequent calls.
     All fields are replaced — this is a full replace, not a partial update.
     """
-    settings = await _get_settings(db)
+    settings = await _get_settings(db, user_id)
 
     if settings is None:
         settings = NotificationSettings(
+            user_id=user_id,
             email=body.email,
             notify_interview=body.notify_interview,
             notify_followup=body.notify_followup,
@@ -127,6 +136,7 @@ async def upsert_notification_settings(
 )
 async def send_test_notification(
     db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> dict:
     """
     Sends a test email to verify the current notification configuration.
@@ -136,7 +146,7 @@ async def send_test_notification(
     Do not call this endpoint repeatedly in production — it is intended
     for one-time verification only.
     """
-    settings = await _get_settings(db)
+    settings = await _get_settings(db, user_id)
     if settings is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

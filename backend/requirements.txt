@@ -26,3 +26,6 @@ greenlet
 
 # Cloud storage
 aioboto3==12.4.0
+
+# Auth — verify Supabase JWTs (HS256, project secret)
+pyjwt==2.9.0

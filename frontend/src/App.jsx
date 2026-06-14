@@ -29,9 +29,11 @@ import Applications from './pages/Applications';
 import FollowUps    from './pages/FollowUps';
 import Analytics    from './pages/Analytics';
 import Settings     from './pages/Settings';
+import Login        from './pages/Login';
 
 import DetailPanel         from './components/DetailPanel';
 import AddApplicationModal from './components/AddApplicationModal';
+import { AuthProvider, useAuth } from './hooks/useAuth';
 
 // ---------------------------------------------------------------------------
 // TanStack Query client — shared across the whole app
@@ -184,12 +186,33 @@ function AppShell() {
 }
 
 // ---------------------------------------------------------------------------
-// Export with QueryClientProvider
+// Auth gate — show Login when unauthenticated
+// ---------------------------------------------------------------------------
+function AuthedAppShell() {
+  const { session, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!session) {
+    return <Login />;
+  }
+  return <AppShell />;
+}
+
+// ---------------------------------------------------------------------------
+// Export with QueryClientProvider + AuthProvider
 // ---------------------------------------------------------------------------
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AppShell />
-    </QueryClientProvider>
+    <AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthedAppShell />
+      </QueryClientProvider>
+    </AuthProvider>
   );
 }

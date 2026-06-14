@@ -49,6 +49,13 @@ class Application(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
+    # user_id is the Supabase Auth user.id (auth.users.id). We don't add a
+    # cross-schema FK because the auth.users table lives in Supabase's
+    # managed schema; the app layer guarantees consistency by always setting
+    # this from the verified JWT subject.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
     job_title: Mapped[str] = mapped_column(String, nullable=False)
     company: Mapped[str] = mapped_column(String, nullable=False)
     date_applied: Mapped[date] = mapped_column(Date, nullable=False)
@@ -140,6 +147,10 @@ class NotificationSettings(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    # One settings row per Supabase Auth user. Unique so PUT can upsert by user.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, unique=True, index=True
     )
     email: Mapped[str] = mapped_column(String, nullable=False)
     notify_interview: Mapped[bool] = mapped_column(

@@ -20,6 +20,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend.auth import get_current_user_id
 from backend.database import get_db
 from backend.models.application import Application, ApplicationStatus, TimelineEvent
 from backend.schemas.application import (
@@ -41,16 +42,20 @@ router = APIRouter(prefix="/api/applications", tags=["applications"])
 
 async def _get_application_or_404(
     app_id: uuid.UUID,
+    user_id: uuid.UUID,
     db: AsyncSession,
     *,
     load_timeline: bool = False,
 ) -> Application:
     """
-    Fetch an Application by primary key.
-    Raises HTTP 404 with a clear message if not found.
-    Optionally eager-loads the timeline_events relationship.
+    Fetch an Application owned by the given user.
+    Returns 404 — never 403 — for someone else's application so we don't
+    leak the existence of records to other users.
     """
-    query = select(Application).where(Application.id == app_id)
+    query = select(Application).where(
+        Application.id == app_id,
+        Application.user_id == user_id,
+    )
     if load_timeline:
         query = query.options(selectinload(Application.timeline_events))
 
@@ -117,12 +122,17 @@ async def list_applications(
         description="Case-insensitive search across job_title and company",
     ),
     db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> List[Application]:
     """
-    Returns all applications ordered by date_applied descending.
+    Returns the caller's applications ordered by date_applied descending.
     Supports optional ?status= and ?search= query parameters.
     """
-    query = select(Application).order_by(Application.date_applied.desc())
+    query = (
+        select(Application)
+        .where(Application.user_id == user_id)
+        .order_by(Application.date_applied.desc())
+    )
 
     if status_filter is not None:
         query = query.where(Application.status == status_filter)
@@ -153,6 +163,7 @@ async def list_applications(
 async def create_application(
     body: ApplicationCreate,
     db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> Application:
     """
     Creates a new Application and an initial TimelineEvent
@@ -174,6 +185,7 @@ async def create_application(
         )
 
     app = Application(
+        user_id=user_id,
         job_title=body.job_title,
         company=body.company,
         date_applied=body.date_applied,
@@ -216,8 +228,9 @@ async def create_application(
 async def get_application(
     app_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> Application:
-    return await _get_application_or_404(app_id, db, load_timeline=True)
+    return await _get_application_or_404(app_id, user_id, db, load_timeline=True)
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +246,7 @@ async def update_application(
     app_id: uuid.UUID,
     body: ApplicationUpdate,
     db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> Application:
     """
     Partial update — only fields explicitly set in the request body are modified.
@@ -244,7 +258,7 @@ async def update_application(
     metadata and a note). This is intentional — document the trade-off here
     so future maintainers don't change it blindly.
     """
-    app = await _get_application_or_404(app_id, db, load_timeline=True)
+    app = await _get_application_or_404(app_id, user_id, db, load_timeline=True)
 
     # Apply scalar field updates (only fields that were actually sent).
     update_data = body.model_dump(exclude_unset=True, exclude={"timeline_event"})
@@ -275,6 +289,7 @@ async def update_application(
 async def delete_application(
     app_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> None:
     """
     Permanently deletes the application.
@@ -286,6 +301,6 @@ async def delete_application(
     If undo / audit trail is needed in the future, add a deleted_at column
     and switch to a soft-delete pattern instead.
     """
-    app = await _get_application_or_404(app_id, db)
+    app = await _get_application_or_404(app_id, user_id, db)
     await db.delete(app)
     logger.info("Deleted application %s", app_id)

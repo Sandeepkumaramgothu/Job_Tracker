@@ -9,10 +9,11 @@ Routes:
 """
 
 import logging
+import uuid
 
-from fastapi import APIRouter, UploadFile, File, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 
+from backend.auth import get_current_user_id
 from backend.schemas.application import FileUploadResponse
 from backend.services.file_service import get_presigned_url, save_file
 
@@ -33,17 +34,17 @@ router = APIRouter(prefix="/api/files", tags=["files"])
 )
 async def upload_file(
     file: UploadFile = File(..., description="PDF or DOCX file, max 5 MB"),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> FileUploadResponse:
     """
     Accepts a single file upload via multipart/form-data.
     Validates MIME type (PDF / DOCX only) and enforces a 5 MB size limit.
     Returns the stored filename and absolute path for linking to an application.
 
-    Workflow:
-      1. Upload the file via this endpoint → receive { filename, path }
-      2. PATCH /api/applications/{id} with { resume_path: path } or { cover_path: path }
+    The stored S3 key is prefixed with the user's id so download authorization
+    can confirm ownership without a separate DB lookup.
     """
-    stored_name, stored_path = await save_file(file)
+    stored_name, stored_path = await save_file(file, key_prefix=str(user_id))
     return FileUploadResponse(filename=stored_name, path=stored_path)
 
 
@@ -52,15 +53,29 @@ async def upload_file(
 # ---------------------------------------------------------------------------
 
 @router.get(
-    "/{filename}",
-    summary="Download a stored file by filename",
-    response_class=RedirectResponse,
+    "/{filename:path}",
+    summary="Get a short-lived presigned URL for a stored file",
 )
-async def download_file(filename: str) -> RedirectResponse:
+async def get_file_download_url(
+    filename: str,
+    user_id: uuid.UUID = Depends(get_current_user_id),
+) -> dict:
     """
-    Redirects to an S3 presigned URL to securely download the file directly 
-    from cloud storage.
+    Returns a presigned S3 URL the client can open to download the file.
+
+    Returns JSON (not a 307) because the auth header from the browser would be
+    stripped on a redirect, and an <a href> on this endpoint can't carry the
+    Authorization header. The frontend fetches this via axios then opens the
+    URL with window.open.
+
+    Authorization is enforced by the key prefix: the upload endpoint writes
+    files under `<user_id>/<random>.<ext>`, so a user can only get URLs for
+    files whose key starts with their own user id.
     """
+    if not filename.startswith(f"{user_id}/"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found.",
+        )
     url = await get_presigned_url(filename)
-    # Temporary redirect so the browser doesn't cache the short-lived presigned URL
-    return RedirectResponse(url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return {"url": url}

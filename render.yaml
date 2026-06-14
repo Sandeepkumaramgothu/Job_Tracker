@@ -22,3 +22,7 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: SUPABASE_JWT_AUDIENCE
+        sync: false

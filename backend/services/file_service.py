@@ -80,7 +80,9 @@ def _get_s3_client():
 # Public API
 # ---------------------------------------------------------------------------
 
-async def save_file(upload: UploadFile) -> Tuple[str, str]:
+async def save_file(
+    upload: UploadFile, key_prefix: str = ""
+) -> Tuple[str, str]:
     if not S3_BUCKET_NAME:
         raise HTTPException(
             status_code=500, detail="S3_BUCKET_NAME environment variable is not set."
@@ -89,6 +91,8 @@ async def save_file(upload: UploadFile) -> Tuple[str, str]:
     _validate_file(upload)
 
     stored_name = _unique_filename(upload.filename or "upload")
+    if key_prefix:
+        stored_name = f"{key_prefix.rstrip('/')}/{stored_name}"
     content = await upload.read()
 
     if len(content) > MAX_FILE_SIZE_BYTES:

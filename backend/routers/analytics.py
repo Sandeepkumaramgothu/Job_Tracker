@@ -21,6 +21,7 @@ with GROUP BY queries. The trade-off is noted here so it can be changed later.
 """
 
 import logging
+import uuid
 from collections import Counter
 from datetime import date
 from typing import Dict, List, Optional
@@ -29,6 +30,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.auth import get_current_user_id
 from backend.database import get_db
 from backend.models.application import Application, ApplicationStatus, TimelineEvent
 from backend.schemas.application import AnalyticsSummary
@@ -49,14 +51,17 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 )
 async def get_analytics_summary(
     db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> AnalyticsSummary:
     """
     Returns a full analytics summary. All metrics default to 0 / None so
     the response shape is always consistent even on an empty tracker.
     """
-    # Fetch all applications in a single query
+    # Fetch this user's applications in a single query
     apps: List[Application] = (
-        await db.execute(select(Application))
+        await db.execute(
+            select(Application).where(Application.user_id == user_id)
+        )
     ).scalars().all()
 
     total = len(apps)
