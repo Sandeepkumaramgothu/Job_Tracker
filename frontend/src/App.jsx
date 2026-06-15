@@ -63,6 +63,9 @@ const NAV_ITEMS = [
 // Sidebar
 // ---------------------------------------------------------------------------
 function Sidebar({ activePage, onNavigate }) {
+  const { user, signOut } = useAuth();
+  const initial = (user?.email || '?').charAt(0).toUpperCase();
+
   return (
     <aside className="fixed left-0 top-0 bottom-0 w-60 bg-slate-900/95 border-r
                        border-slate-800 flex flex-col z-20 backdrop-blur-xl">
@@ -106,8 +109,31 @@ function Sidebar({ activePage, onNavigate }) {
         })}
       </nav>
 
+      {/* User card + sign out */}
+      <div className="px-3 py-3 border-t border-slate-800">
+        <div className="flex items-center gap-3 px-2 py-2">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-600
+                          flex items-center justify-center text-xs font-bold text-white shrink-0">
+            {initial}
+          </div>
+          <p className="text-xs text-slate-300 truncate flex-1" title={user?.email}>
+            {user?.email}
+          </p>
+        </div>
+        <button
+          id="sidebar-sign-out-btn"
+          onClick={signOut}
+          className="mt-1 w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm
+                     font-medium text-slate-400 hover:text-red-300 hover:bg-red-500/10
+                     transition-colors text-left"
+        >
+          <span className="text-base w-5 text-center">↩︎</span>
+          Sign out
+        </button>
+      </div>
+
       {/* Footer */}
-      <div className="px-5 py-4 border-t border-slate-800">
+      <div className="px-5 py-3 border-t border-slate-800">
         <p className="text-[10px] text-slate-600 text-center">
           Job Tracker v1.0 · Built with FastAPI + React
         </p>
