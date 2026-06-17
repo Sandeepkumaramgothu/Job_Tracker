@@ -23,6 +23,9 @@ const DEFAULTS = {
   notify_stale:     true,
   weekly_summary:   false,
   followup_freq_days: 7,
+  ai_provider: 'openai',
+  ai_model:    'gpt-4o-mini',
+  ai_api_key:  '',
 };
 
 // ---------------------------------------------------------------------------
@@ -77,7 +80,9 @@ export default function Settings() {
   const testMutation = useSendTestEmail();
   const { user, signOut } = useAuth();
 
-  // Populate form when settings load
+  // Populate form when settings load. The backend never returns ai_api_key
+  // (only ai_key_hint), so we keep ai_api_key blank — submitting with it
+  // empty leaves the stored key untouched.
   useEffect(() => {
     if (settings) {
       setForm({
@@ -87,6 +92,9 @@ export default function Settings() {
         notify_stale:       settings.notify_stale,
         weekly_summary:     settings.weekly_summary,
         followup_freq_days: settings.followup_freq_days,
+        ai_provider:        settings.ai_provider || 'openai',
+        ai_model:           settings.ai_model    || 'gpt-4o-mini',
+        ai_api_key:         '',
       });
     }
   }, [settings]);
@@ -99,9 +107,15 @@ export default function Settings() {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaveSuccess(false);
+    // Sending an empty ai_api_key would clear the stored key. We only want
+    // that when the user explicitly typed something OR clicked "Clear" — so
+    // strip the field unless they actually entered a new value.
+    const payload = { ...form };
+    if (!payload.ai_api_key) delete payload.ai_api_key;
     try {
-      await saveMutation.mutateAsync(form);
+      await saveMutation.mutateAsync(payload);
       setSaveSuccess(true);
+      setForm((prev) => ({ ...prev, ai_api_key: '' }));
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch {
       // error surfaced via saveMutation.error
@@ -214,6 +228,88 @@ export default function Settings() {
               />
               <span className="text-sm text-slate-400">days</span>
             </div>
+          </div>
+        </div>
+
+        {/* AI extraction */}
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-4">
+          <div>
+            <h2 className="text-sm font-bold text-slate-300 uppercase tracking-widest">
+              AI Extraction
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Paste your own LLM API key. Used only for the "Extract with AI"
+              button on the New Application modal. We store it server-side and
+              never return it from the API again.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="ai-provider" className="block text-xs font-semibold text-slate-400 mb-1.5">
+                Provider
+              </label>
+              <select
+                id="ai-provider"
+                value={form.ai_provider}
+                onChange={(e) => handleChange('ai_provider', e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5
+                           text-sm text-slate-100 focus:outline-none focus:border-blue-500
+                           focus:ring-1 focus:ring-blue-500 transition-colors cursor-pointer"
+              >
+                <option value="openai">OpenAI</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="ai-model" className="block text-xs font-semibold text-slate-400 mb-1.5">
+                Model
+              </label>
+              <input
+                id="ai-model"
+                type="text"
+                value={form.ai_model}
+                onChange={(e) => handleChange('ai_model', e.target.value)}
+                placeholder="gpt-4o-mini"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5
+                           text-sm text-slate-100 placeholder-slate-500
+                           focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500
+                           transition-colors"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="ai-key" className="block text-xs font-semibold text-slate-400 mb-1.5">
+              API Key
+              {settings?.ai_key_hint && (
+                <span className="ml-2 text-emerald-400 font-normal">
+                  ✓ saved (ending …{settings.ai_key_hint})
+                </span>
+              )}
+            </label>
+            <input
+              id="ai-key"
+              type="password"
+              value={form.ai_api_key}
+              onChange={(e) => handleChange('ai_api_key', e.target.value)}
+              placeholder={settings?.ai_key_hint ? 'Leave blank to keep the saved key' : 'sk-…'}
+              autoComplete="off"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5
+                         text-sm text-slate-100 placeholder-slate-500 font-mono
+                         focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500
+                         transition-colors"
+            />
+            <p className="text-xs text-slate-500 mt-1.5">
+              Get one at{' '}
+              <a
+                href="https://platform.openai.com/api-keys"
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-400 hover:text-blue-300"
+              >
+                platform.openai.com/api-keys
+              </a>.
+            </p>
           </div>
         </div>
 

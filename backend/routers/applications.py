@@ -30,6 +30,7 @@ from backend.schemas.application import (
     ApplicationUpdate,
     TimelineEventCreate,
 )
+from backend.services.file_service import delete_file
 
 logger = logging.getLogger(__name__)
 
@@ -292,15 +293,23 @@ async def delete_application(
     user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> None:
     """
-    Permanently deletes the application.
-    Timeline events are removed by the DB-level CASCADE on the FK.
-    File paths stored in resume_path / cover_path are NOT deleted here —
-    file cleanup is handled by file_service.py.
+    Permanently deletes the application, its timeline events (via DB CASCADE),
+    and any uploaded resume / cover-letter files in S3.
 
-    WARN: This is a hard delete with no soft-delete fallback.
-    If undo / audit trail is needed in the future, add a deleted_at column
-    and switch to a soft-delete pattern instead.
+    WARN: Hard delete with no soft-delete fallback. If undo / audit trail is
+    needed in the future, add a deleted_at column and switch to a soft-delete
+    pattern instead. S3 deletes are best-effort — a failure there is logged
+    but does not block the DB delete (the row going first means orphan files
+    are worse than orphan rows in this app).
     """
     app = await _get_application_or_404(app_id, user_id, db)
+
+    paths_to_clean = [p for p in (app.resume_path, app.cover_path) if p]
     await db.delete(app)
     logger.info("Deleted application %s", app_id)
+
+    for path in paths_to_clean:
+        try:
+            await delete_file(path)
+        except Exception as exc:
+            logger.warning("S3 cleanup failed for %s: %s", path, exc)

@@ -168,6 +168,12 @@ class NotificationSettings(Base):
     followup_freq_days: Mapped[int] = mapped_column(
         Integer, nullable=False, default=7
     )
+    # AI extraction settings — user pastes their own LLM API key. We store
+    # it as-is (Supabase encrypts at rest); the backend never returns the
+    # full key in API responses.
+    ai_provider: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    ai_api_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    ai_model: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     def __repr__(self) -> str:
         return f"<NotificationSettings id={self.id} email={self.email!r}>"

@@ -32,7 +32,7 @@ import sys
 # when running 'uvicorn main:app' directly from the backend/ directory.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.routers import analytics, applications, files, notifications, cron
+from backend.routers import ai, analytics, applications, files, notifications, cron
 
 load_dotenv()
 
@@ -142,6 +142,7 @@ app.include_router(files.router)
 app.include_router(notifications.router)
 app.include_router(analytics.router)
 app.include_router(cron.router)
+app.include_router(ai.router)
 
 
 # ---------------------------------------------------------------------------

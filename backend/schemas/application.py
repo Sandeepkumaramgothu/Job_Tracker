@@ -160,10 +160,19 @@ class NotificationSettingsUpdate(BaseModel):
         le=365,
         description="Days between follow-up reminders",
     )
+    # AI settings — all optional. Sending an empty string for ai_api_key
+    # explicitly clears the stored key; omitting the field leaves it as-is.
+    ai_provider: Optional[str] = Field(default=None, description="e.g. 'openai'")
+    ai_api_key: Optional[str] = Field(default=None, description="User-supplied LLM API key")
+    ai_model: Optional[str] = Field(default=None, description="e.g. 'gpt-4o-mini'")
 
 
 class NotificationSettingsResponse(BaseModel):
-    """Read model for GET /api/notifications/settings."""
+    """
+    Read model for GET /api/notifications/settings.
+    The actual ai_api_key is NEVER returned — only a redacted hint
+    (last 4 chars) so the UI can show "configured" without exposing it.
+    """
     model_config = _orm_config
 
     id: uuid.UUID
@@ -173,6 +182,39 @@ class NotificationSettingsResponse(BaseModel):
     notify_stale: bool
     weekly_summary: bool
     followup_freq_days: int
+    ai_provider: Optional[str] = None
+    ai_model: Optional[str] = None
+    ai_key_hint: Optional[str] = Field(
+        default=None,
+        description="Last 4 chars of the stored AI key, or None if unset",
+    )
+
+
+# ===========================================================================
+# AI extraction schemas
+# ===========================================================================
+
+class AIExtractRequest(BaseModel):
+    """Body for POST /api/ai/extract."""
+    job_description: str = Field(
+        ...,
+        min_length=20,
+        description="Pasted job description text to be parsed",
+    )
+
+
+class AIExtractResponse(BaseModel):
+    """
+    Result of parsing a JD. All fields are optional because the LLM might
+    not find a clear value for everything; the frontend fills what it gets
+    and leaves the rest blank for the user to fill in.
+    """
+    job_title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    salary_range: Optional[str] = None
+    source: Optional[str] = None
+    notes: Optional[str] = None
 
 
 # ===========================================================================

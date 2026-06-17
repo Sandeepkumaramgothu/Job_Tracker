@@ -50,6 +50,24 @@ async def _get_settings(
     return result.scalar_one_or_none()
 
 
+def _to_response(settings: NotificationSettings) -> dict:
+    """Convert a NotificationSettings row into the response shape, redacting
+    the AI key down to a 4-char hint so it never leaves the server."""
+    key = settings.ai_api_key or ""
+    return {
+        "id": settings.id,
+        "email": settings.email,
+        "notify_interview": settings.notify_interview,
+        "notify_followup": settings.notify_followup,
+        "notify_stale": settings.notify_stale,
+        "weekly_summary": settings.weekly_summary,
+        "followup_freq_days": settings.followup_freq_days,
+        "ai_provider": settings.ai_provider,
+        "ai_model": settings.ai_model,
+        "ai_key_hint": key[-4:] if key else None,
+    }
+
+
 # ---------------------------------------------------------------------------
 # GET /api/notifications/settings
 # ---------------------------------------------------------------------------
@@ -76,7 +94,7 @@ async def get_notification_settings(
                 "Send a PUT request to /api/notifications/settings to create them."
             ),
         )
-    return settings
+    return _to_response(settings)
 
 
 # ---------------------------------------------------------------------------
@@ -120,9 +138,18 @@ async def upsert_notification_settings(
         settings.followup_freq_days = body.followup_freq_days
         logger.info("Updated notification settings for %s", body.email)
 
+    # AI fields: only overwrite when the client explicitly sent something.
+    # An empty string for ai_api_key clears the stored key; None leaves it alone.
+    if body.ai_provider is not None:
+        settings.ai_provider = body.ai_provider or None
+    if body.ai_model is not None:
+        settings.ai_model = body.ai_model or None
+    if body.ai_api_key is not None:
+        settings.ai_api_key = body.ai_api_key or None
+
     await db.flush()
     await db.refresh(settings)
-    return settings
+    return _to_response(settings)
 
 
 # ---------------------------------------------------------------------------
