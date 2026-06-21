@@ -24,9 +24,16 @@ import uuid
 from typing import Optional
 
 import jwt
+from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
+
+# Load .env before reading any SUPABASE_* vars below. This module is imported
+# (via the routers) BEFORE main.py calls load_dotenv(), so without this the
+# vars would be read as None and every request would 401 with
+# "Server is missing SUPABASE_URL". database.py loads .env the same way.
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 

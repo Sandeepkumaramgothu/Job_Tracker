@@ -32,9 +32,13 @@ import sys
 # when running 'uvicorn main:app' directly from the backend/ directory.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.routers import ai, analytics, applications, files, notifications, cron
-
+# Load .env BEFORE importing the routers — they pull in modules (auth, database)
+# that read os.environ at import time. Loading after the import would leave
+# those module-level vars set to None. (auth.py and database.py also call
+# load_dotenv() themselves as a safety net.)
 load_dotenv()
+
+from backend.routers import ai, analytics, applications, files, notifications, cron
 
 logging.basicConfig(
     level=logging.INFO,
